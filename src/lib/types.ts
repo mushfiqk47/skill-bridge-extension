@@ -1,3 +1,6 @@
+/** How a skill was loaded into the library. */
+export type SkillSource = 'local' | 'imported-text' | 'imported-url';
+
 export interface SkillFile {
   id: string; // Folder name (kebab-case)
   name: string; // Display name from frontmatter
@@ -12,12 +15,23 @@ export interface SkillFile {
   validation: SkillValidationResult;
   isFavorite?: boolean;
   tags?: string[];
+  source?: SkillSource; // How this skill was loaded (defaults to 'local')
+  importedAt?: number; // Timestamp when the skill was imported (for non-local skills)
 }
 
 export interface SkillValidationResult {
   isValid: boolean;
   errors: string[];
   warnings: string[];
+}
+
+/** Progress callback data emitted during directory scanning. */
+export interface ScanProgress {
+  phase: 'scanning' | 'parsing' | 'done';
+  currentFolder: string;
+  skillsFound: number;
+  errors: number;
+  totalDirsScanned: number;
 }
 
 export interface SyncTarget {
@@ -50,3 +64,4 @@ export interface SkillSyncPayload {
   targetPath: string;
   files: SkillPayloadFile[];
 }
+

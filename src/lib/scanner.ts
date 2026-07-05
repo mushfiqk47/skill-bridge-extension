@@ -1,11 +1,17 @@
 import { parseSkillMarkdown } from './parser';
-import { SkillFile } from './types';
+import { SkillFile, ScanProgress } from './types';
 
 /**
  * Recursively scans a directory handle for folders containing SKILL.md.
+ * Emits progress updates via the onProgress callback if provided.
  */
-export async function scanSkillsFolder(directoryHandle: FileSystemDirectoryHandle): Promise<SkillFile[]> {
+export async function scanSkillsFolder(
+  directoryHandle: FileSystemDirectoryHandle,
+  onProgress?: (progress: ScanProgress) => void
+): Promise<SkillFile[]> {
   const skills: SkillFile[] = [];
+  let totalDirsScanned = 0;
+  let errors = 0;
 
   // Verify permission is active
   const opts: FileSystemHandlePermissionDescriptor = { mode: 'read' };
@@ -17,28 +23,45 @@ export async function scanSkillsFolder(directoryHandle: FileSystemDirectoryHandl
 
   // Recursive search
   async function walk(handle: FileSystemDirectoryHandle, relativePath: string = '') {
+    totalDirsScanned++;
+    if (onProgress) {
+      onProgress({
+        phase: 'scanning',
+        currentFolder: relativePath || handle.name,
+        skillsFound: skills.length,
+        errors,
+        totalDirsScanned
+      });
+    }
+
     let skillMdFile: FileSystemFileHandle | null = null;
     const subDirs: FileSystemDirectoryHandle[] = [];
     const files: { path: string; size: number }[] = [];
 
-    for await (const entry of handle.values()) {
-      if (entry.kind === 'file') {
-        if (entry.name.toLowerCase() === 'skill.md') {
-          skillMdFile = entry;
-        } else {
-          try {
-            const file = await entry.getFile();
-            files.push({
-              path: relativePath ? `${relativePath}/${entry.name}` : entry.name,
-              size: file.size
-            });
-          } catch (e) {
-            // Skip unreadable files
+    try {
+      for await (const entry of handle.values()) {
+        if (entry.kind === 'file') {
+          if (entry.name.toLowerCase() === 'skill.md') {
+            skillMdFile = entry;
+          } else {
+            try {
+              const file = await entry.getFile();
+              files.push({
+                path: relativePath ? `${relativePath}/${entry.name}` : entry.name,
+                size: file.size
+              });
+            } catch (e) {
+              // Skip unreadable files silently
+            }
           }
+        } else if (entry.kind === 'directory') {
+          subDirs.push(entry);
         }
-      } else if (entry.kind === 'directory') {
-        subDirs.push(entry);
       }
+    } catch (e) {
+      // Directory iteration failed
+      errors++;
+      return;
     }
 
     if (skillMdFile) {
@@ -46,6 +69,17 @@ export async function scanSkillsFolder(directoryHandle: FileSystemDirectoryHandl
         const file = await skillMdFile.getFile();
         const text = await file.text();
         const folderName = handle.name;
+        
+        if (onProgress) {
+          onProgress({
+            phase: 'parsing',
+            currentFolder: relativePath || folderName,
+            skillsFound: skills.length,
+            errors,
+            totalDirsScanned
+          });
+        }
+        
         const parsed = parseSkillMarkdown(
           folderName, 
           text, 
@@ -59,6 +93,7 @@ export async function scanSkillsFolder(directoryHandle: FileSystemDirectoryHandl
         skills.push(parsed);
       } catch (e) {
         console.error(`Failed to parse SKILL.md in folder: ${handle.name}`, e);
+        errors++;
       }
     }
 
@@ -70,6 +105,17 @@ export async function scanSkillsFolder(directoryHandle: FileSystemDirectoryHandl
   }
 
   await walk(directoryHandle);
+  
+  if (onProgress) {
+    onProgress({
+      phase: 'done',
+      currentFolder: '',
+      skillsFound: skills.length,
+      errors,
+      totalDirsScanned
+    });
+  }
+  
   return skills;
 }
 
@@ -87,7 +133,11 @@ export async function prepareSkillFiles(
   if (skillRelativePath && skillRelativePath !== '.') {
     const parts = skillRelativePath.split('/');
     for (const part of parts) {
-      currentHandle = await currentHandle.getDirectoryHandle(part);
+      try {
+        currentHandle = await currentHandle.getDirectoryHandle(part);
+      } catch (e) {
+        throw new Error(`Failed to resolve skill directory path: ${skillRelativePath}`);
+      }
     }
   }
 

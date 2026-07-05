@@ -153,24 +153,7 @@ let scrollHandler: (() => void) | null = null;
 let resizeHandler: (() => void) | null = null;
 
 if (activeConfig) {
-  // Check settings to see if adapter is enabled
-  try {
-    chrome.storage.local.get(['settings'], (result) => {
-      try {
-        if (chrome.runtime.lastError) return;
-        const settings = result.settings;
-        const adapterEnabled = settings?.siteAdapters?.[matchedDomain!] ?? true;
-        
-        if (adapterEnabled) {
-          initInjectionLoop();
-        }
-      } catch (_innerErr) {
-        // Catch async context invalidation during callback execution
-      }
-    });
-  } catch (_err) {
-    // Catch sync context invalidation
-  }
+  initInjectionLoop();
 }
 
 function initInjectionLoop() {

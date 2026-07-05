@@ -1,15 +1,17 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { 
-  FolderOpen, Search, Star, RefreshCw, Settings as SettingsIcon, AlertCircle, 
-  FileText, ShieldAlert, Sparkles
+  FolderOpen, Search, Star, RefreshCw, AlertCircle, 
+  FileText, ShieldAlert, Sparkles, Download, Copy
 } from 'lucide-react';
-import { SkillFile, SyncTarget, Settings } from '../lib/types';
+import { SkillFile, SyncTarget, Settings, ScanProgress } from '../lib/types';
 import { 
   getDirectoryHandle, saveDirectoryHandle, 
-  getSettings, saveSettings, getCachedSkills, saveCachedSkills 
+  getSettings, saveSettings, getCachedSkills, saveCachedSkills,
+  saveImportedSkill, removeSkillFromCache, exportSkillAsFile
 } from '../lib/storage';
 import { scanSkillsFolder, prepareSkillFiles } from '../lib/scanner';
+import { parseSkillFromRawText } from '../lib/parser';
 import { CommandPalette } from '../components/CommandPalette';
 import '../styles/global.css';
 
@@ -28,6 +30,7 @@ function PopupApp() {
   // Library scans & handles
   const [folderName, setFolderName] = useState<string>('');
   const [isScanning, setIsScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
   const [scanError, setScanError] = useState<string>('');
   const [needPermission, setNeedPermission] = useState(false);
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
@@ -45,6 +48,12 @@ function PopupApp() {
 
   // Command Palette Open state
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
+
+  // Import Modal state
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importType, setImportType] = useState<'paste' | 'url'>('paste');
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState('');
 
   // Load initial settings and cached skills
   useEffect(() => {
@@ -117,16 +126,25 @@ function PopupApp() {
 
   const triggerScan = async (handle: FileSystemDirectoryHandle) => {
     setIsScanning(true);
+    setScanProgress(null);
     setScanError('');
     try {
-      const scannedSkills = await scanSkillsFolder(handle);
-      setSkills(scannedSkills);
-      await saveCachedSkills(scannedSkills);
+      const scannedSkills = await scanSkillsFolder(handle, (progress) => {
+        setScanProgress(progress);
+      });
+      // Merge scanned skills with imported skills
+      const currentCached = await getCachedSkills();
+      const importedSkills = currentCached.filter(s => s.source === 'imported-text' || s.source === 'imported-url');
+      const combined = [...importedSkills, ...scannedSkills];
+      
+      setSkills(combined);
+      await saveCachedSkills(combined);
       setNeedPermission(false);
     } catch (e: any) {
       setScanError(e.message || 'Scanning folder failed.');
     } finally {
       setIsScanning(false);
+      setTimeout(() => setScanProgress(null), 2000);
     }
   };
 
@@ -205,7 +223,64 @@ Create complete, premium brand guidelines boards with minimalist grid structures
     }
   };
 
-  // Sync skill to target
+  // ── Import / Export / Delete Operations ──────────
+
+  const handleImportSubmit = async () => {
+    setImportError('');
+    if (!importText.trim()) {
+      setImportError('Input cannot be empty.');
+      return;
+    }
+
+    try {
+      let rawSource = importText;
+
+      if (importType === 'url') {
+        const url = new URL(importText);
+        if (url.hostname === 'github.com') {
+          // Convert regular github URLs to raw URLs if possible
+          rawSource = importText.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+        }
+        
+        const res = await fetch(rawSource);
+        if (!res.ok) throw new Error(`Failed to fetch URL (${res.status})`);
+        rawSource = await res.text();
+      }
+
+      const parsed = parseSkillFromRawText(rawSource, importType === 'url' ? 'imported-url' : 'imported-text');
+      
+      if (!parsed.validation.isValid) {
+        throw new Error('Skill invalid:\n' + parsed.validation.errors.join('\n'));
+      }
+
+      await saveImportedSkill(parsed);
+      const updated = await getCachedSkills();
+      setSkills(updated);
+      
+      setImportModalOpen(false);
+      setImportText('');
+      alert(`Skill "${parsed.name}" imported successfully.`);
+    } catch (e: any) {
+      setImportError(e.message || 'Import failed.');
+    }
+  };
+
+  const handleDeleteSkill = async (skillId: string) => {
+    if (!confirm('Remove this imported skill from your library?')) return;
+    try {
+      const updated = await removeSkillFromCache(skillId);
+      setSkills(updated);
+      setSelectedSkill(null);
+    } catch (e: any) {
+      alert('Failed to delete: ' + e.message);
+    }
+  };
+
+  const handleExportSkill = (skill: SkillFile) => {
+    exportSkillAsFile(skill);
+  };
+
+  // ── Sync UI Helpers ───────────────to target
   const syncSkillToTarget = async (skill: SkillFile, target: SyncTarget, forceOverwrite = false) => {
     if (!dirHandle) return;
     const targetPath = target.customPath || target.defaultPath;
@@ -397,12 +472,6 @@ Create complete, premium brand guidelines boards with minimalist grid structures
               />
             ))}
           </div>
-          <button 
-            onClick={openSettingsPage}
-            className="p-1.5 text-cyber-text-muted-dark hover:text-cyber-text-primary-dark hover:bg-cyber-surface-dark rounded-md transition-colors"
-          >
-            <SettingsIcon className="size-4" />
-          </button>
         </div>
       </header>
 
@@ -502,15 +571,31 @@ Create complete, premium brand guidelines boards with minimalist grid structures
                     className="w-full h-8 pl-8 pr-2 bg-cyber-bg-dark border border-cyber-border-dark rounded-md text-xs text-cyber-text-primary-dark placeholder-cyber-text-muted-dark outline-none focus:border-cyber-blue transition-colors font-sans focus:ring-1 focus:ring-cyber-blue"
                   />
                 </div>
-                <button 
-                  onClick={() => dirHandle && triggerScan(dirHandle)}
-                  disabled={isScanning || !dirHandle}
-                  className="h-8 w-8 flex items-center justify-center bg-cyber-bg-dark border border-cyber-border-dark rounded-md text-cyber-text-muted-dark hover:text-cyber-text-primary-dark disabled:opacity-50 transition-colors hover:bg-cyber-surface-dark"
-                  title="Rescan Local Folder"
-                >
-                  <RefreshCw className={`size-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
+                  <button 
+                    onClick={() => dirHandle && triggerScan(dirHandle)}
+                    disabled={isScanning || !dirHandle}
+                    className="h-8 w-8 flex items-center justify-center bg-cyber-bg-dark border border-cyber-border-dark rounded-md text-cyber-text-muted-dark hover:text-cyber-text-primary-dark disabled:opacity-50 transition-colors hover:bg-cyber-surface-dark shrink-0"
+                    title="Rescan Local Folder"
+                  >
+                    <RefreshCw className={`size-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+                  </button>
+                 </div>
+                
+                {/* Progress Indicator */}
+                {scanProgress && (
+                  <div className="flex items-center gap-2 text-[10px] text-cyber-text-muted-dark font-sans px-1">
+                    <div className="flex-1 h-1 bg-cyber-border-dark rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full bg-cyber-blue transition-all duration-300 ${scanProgress.phase === 'done' ? 'w-full' : 'w-2/3'}`} 
+                      />
+                    </div>
+                    <span className="truncate max-w-[150px]">
+                      {scanProgress.phase === 'done' 
+                        ? `Found ${scanProgress.skillsFound} skills`
+                        : `Scanning ${scanProgress.currentFolder || '...'}`}
+                    </span>
+                  </div>
+                )}
 
               {/* Tag Filters */}
               {allTags.length > 0 && (
@@ -566,25 +651,7 @@ Create complete, premium brand guidelines boards with minimalist grid structures
 
           {/* Tab Contents */}
           <div className="flex-1 overflow-y-auto p-3 min-h-0 bg-cyber-bg-dark">
-            {needPermission && (
-              <div className="mb-3 p-3 border border-cyber-border-dark bg-cyber-surface-dark rounded-lg flex flex-col gap-2.5">
-                <div className="flex items-start gap-2.5">
-                  <ShieldAlert className="size-4 text-cyber-text-primary-dark shrink-0 mt-0.5" />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-semibold font-sans text-cyber-text-primary-dark">Permissions Required</span>
-                    <span className="text-[10px] text-cyber-text-muted-dark leading-relaxed font-sans">
-                      Chrome sandboxes directory folders between runs. Click below to re-authorize read access to folder <code className="text-cyber-text-primary-dark font-semibold">"{folderName}"</code>.
-                    </span>
-                  </div>
-                </div>
-                <button 
-                  onClick={requestFolderPermission}
-                  className="h-7 bg-cyber-blue hover:bg-[#242424] font-semibold text-[10px] rounded-md transition-colors text-white font-sans self-start px-3"
-                >
-                  Grant Read Permission
-                </button>
-              </div>
-            )}
+
 
             {/* Library Grid */}
             {activeTab === 'library' && !selectedSkill && (
@@ -675,7 +742,11 @@ Create complete, premium brand guidelines boards with minimalist grid structures
                               onClick={() => setSelectedSkill(skill)}
                               className="flex flex-col text-left overflow-hidden cursor-pointer flex-1"
                             >
-                              <span className="font-semibold text-xs font-sans text-cyber-text-primary-dark">{skill.name}</span>
+                              <span className="font-semibold text-xs font-sans text-cyber-text-primary-dark flex items-center gap-1.5">
+                                {skill.name}
+                                {skill.source === 'imported-text' && <span className="text-[8px] bg-cyber-border-dark px-1.5 rounded-full text-cyber-text-muted-dark">PASTED</span>}
+                                {skill.source === 'imported-url' && <span className="text-[8px] bg-cyber-border-dark px-1.5 rounded-full text-cyber-text-muted-dark">URL</span>}
+                              </span>
                               <span className="text-[10px] text-cyber-text-muted-dark truncate mt-0.5">{skill.description}</span>
                             </div>
                           </div>
@@ -704,6 +775,67 @@ Create complete, premium brand guidelines boards with minimalist grid structures
             {/* Target Sync Status Tab */}
             {activeTab === 'targets' && (
               <div className="flex flex-col gap-3">
+                {/* Folder Connection Settings Card */}
+                <div className="p-3.5 bg-cyber-surface-dark border border-cyber-border-dark/60 rounded-lg flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold font-sans text-cyber-text-primary-dark flex items-center gap-1.5">
+                      <FolderOpen className="size-4 text-cyber-blue" />
+                      Local Skills Library
+                    </span>
+                    {folderName && (
+                      <span className="text-[10px] text-cyber-valid bg-cyber-valid/15 border border-cyber-valid/25 px-2 py-0.5 rounded-full font-sans font-semibold uppercase">
+                        Connected
+                      </span>
+                    )}
+                  </div>
+                  
+                  {folderName ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between text-[10px] text-cyber-text-muted-dark font-sans">
+                        <span>Folder: <code className="text-cyber-text-primary-dark font-mono font-semibold">{folderName}</code></span>
+                        <button 
+                          onClick={selectFolder}
+                          className="text-cyber-blue hover:underline font-semibold"
+                        >
+                          Change Folder
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 text-left">
+                      <span className="text-[10px] text-cyber-text-muted-dark leading-relaxed font-sans">
+                        Connect a local directory containing your agent skill templates to sync them to Cursor, Claude Code, and other CLI tools.
+                      </span>
+                      <button 
+                        onClick={selectFolder}
+                        className="h-8 bg-cyber-blue hover:bg-[#242424] text-white font-semibold text-[10px] rounded-md transition-colors font-sans w-full flex items-center justify-center gap-1.5"
+                      >
+                        <FolderOpen className="size-3.5" />
+                        Connect Skills Folder
+                      </button>
+                    </div>
+                  )}
+
+                  {needPermission && (
+                    <div className="mt-1.5 p-2.5 border border-cyber-border-dark bg-cyber-bg-dark rounded-md flex flex-col gap-2">
+                      <div className="flex items-start gap-2">
+                        <ShieldAlert className="size-3.5 text-cyber-text-primary-dark shrink-0 mt-0.5" />
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-semibold font-sans text-cyber-text-primary-dark">Permission Required</span>
+                          <span className="text-[9px] text-cyber-text-muted-dark leading-normal font-sans">
+                            Chrome sandboxes directories between runs. Re-authorize access to <code className="text-cyber-text-primary-dark font-semibold">"{folderName}"</code>.
+                          </span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={requestFolderPermission}
+                        className="h-6 bg-cyber-blue hover:bg-[#242424] font-semibold text-[9px] rounded-md transition-colors text-white font-sans self-start px-2.5"
+                      >
+                        Grant Read Permission
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {targets.map(target => (
                   <div key={target.id} className="p-3.5 bg-cyber-surface-dark border border-cyber-border-dark/60 rounded-lg flex flex-col gap-3">
                     <div className="flex items-start justify-between">
@@ -780,17 +912,78 @@ Create complete, premium brand guidelines boards with minimalist grid structures
 
                 <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3">
                   <div className="flex flex-col bg-cyber-surface-dark border border-cyber-border-dark/60 rounded-lg p-3">
-                    <h3 className="font-semibold text-sm font-sans text-cyber-text-primary-dark tracking-tight">{selectedSkill.name}</h3>
-                    <p className="text-[10px] text-cyber-text-muted-dark leading-relaxed mt-1">{selectedSkill.description}</p>
-                    
-                    {selectedSkill.tags && selectedSkill.tags.length > 0 && (
-                      <div className="flex gap-1 mt-2.5 flex-wrap">
-                        {selectedSkill.tags.map(t => (
-                          <span key={t} className="px-2 py-0.5 bg-white border border-cyber-border-dark rounded-full text-[8px] font-sans font-semibold text-cyber-text-muted-dark">
-                            {t}
+                    <div className="flex items-start justify-between">
+                      <h3 className="font-semibold text-sm font-sans text-cyber-text-primary-dark tracking-tight">{selectedSkill.name}</h3>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedSkill.tags?.map(tag => (
+                          <span key={tag} className="px-1.5 py-0.5 bg-cyber-border-dark/50 text-cyber-text-primary-dark text-[8px] uppercase tracking-wider font-bold rounded">
+                            {tag}
                           </span>
                         ))}
                       </div>
+                    </div>
+
+                    {/* Source Badge */}
+                    {selectedSkill.source && selectedSkill.source !== 'local' && (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-cyber-surface-dark border border-cyber-border-dark rounded text-[9px] font-sans text-cyber-text-muted-dark shrink-0 mt-2">
+                        <Download className="size-3" />
+                        <span>Imported</span>
+                      </div>
+                    )}
+                    
+                    <p className="text-[11px] text-cyber-text-muted-dark font-sans leading-relaxed mt-2.5 bg-cyber-surface-dark p-2 rounded-md border border-cyber-border-dark/40">
+                      {selectedSkill.description}
+                    </p>
+                  </div>
+
+                  {/* Meta & Stats */}
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-sans bg-cyber-bg-dark border-y border-cyber-border-dark p-2 text-cyber-text-muted-dark">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-cyber-text-primary-dark/80 tracking-wide uppercase text-[9px]">ID (Folder)</span>
+                      <span className="truncate font-mono">{selectedSkill.id}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-cyber-text-primary-dark/80 tracking-wide uppercase text-[9px]">Size</span>
+                      <span>{(selectedSkill.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-cyber-text-primary-dark/80 tracking-wide uppercase text-[9px]">Last Modified</span>
+                      <span>{new Date(selectedSkill.lastModified).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-cyber-text-primary-dark/80 tracking-wide uppercase text-[9px]">Path</span>
+                      <span className="truncate font-mono" title={selectedSkill.path}>{selectedSkill.path}</span>
+                    </div>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className="flex items-center justify-between p-2 bg-cyber-surface-dark rounded-md border border-cyber-border-dark/40">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedSkill.rawSource);
+                          alert('Skill source copied to clipboard!');
+                        }}
+                        className="px-3 py-1.5 bg-cyber-bg-dark hover:bg-[#2a2a2a] border border-cyber-border-dark rounded-md text-[10px] font-semibold text-cyber-text-primary-dark font-sans transition-colors flex items-center gap-1.5"
+                      >
+                        <Copy className="size-3" />
+                        Copy Raw
+                      </button>
+                      <button
+                        onClick={() => handleExportSkill(selectedSkill)}
+                        className="px-3 py-1.5 bg-cyber-bg-dark hover:bg-[#2a2a2a] border border-cyber-border-dark rounded-md text-[10px] font-semibold text-cyber-text-primary-dark font-sans transition-colors flex items-center gap-1.5"
+                      >
+                        <Download className="size-3" />
+                        Export
+                      </button>
+                    </div>
+                    {selectedSkill.source && selectedSkill.source !== 'local' && (
+                      <button
+                        onClick={() => handleDeleteSkill(selectedSkill.id)}
+                        className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-md text-[10px] font-semibold font-sans transition-colors flex items-center gap-1.5"
+                      >
+                        Delete
+                      </button>
                     )}
                   </div>
 
@@ -913,6 +1106,73 @@ Create complete, premium brand guidelines boards with minimalist grid structures
         onRescan={() => dirHandle && triggerScan(dirHandle)}
         onGoToSettings={openSettingsPage}
       />
+
+      {/* Import Skill Modal */}
+      {importModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-cyber-darkElevated border border-cyber-border-dark rounded-xl w-full max-w-sm overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-3 border-b border-cyber-border-dark flex justify-between items-center">
+              <h3 className="text-xs font-semibold text-white font-sans">Import Skill</h3>
+              <button onClick={() => setImportModalOpen(false)} className="text-cyber-text-muted-dark hover:text-white">&times;</button>
+            </div>
+            
+            <div className="flex border-b border-cyber-border-dark text-[10px] font-sans font-semibold">
+              <button 
+                onClick={() => setImportType('paste')}
+                className={`flex-1 py-2 ${importType === 'paste' ? 'text-cyber-blue border-b border-cyber-blue bg-cyber-blue/5' : 'text-cyber-text-muted-dark hover:bg-[#222]'}`}
+              >
+                Paste Content
+              </button>
+              <button 
+                onClick={() => setImportType('url')}
+                className={`flex-1 py-2 ${importType === 'url' ? 'text-cyber-blue border-b border-cyber-blue bg-cyber-blue/5' : 'text-cyber-text-muted-dark hover:bg-[#222]'}`}
+              >
+                From URL
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-col gap-3">
+              {importType === 'paste' ? (
+                <textarea
+                  placeholder="Paste SKILL.md content here (must include frontmatter)..."
+                  value={importText}
+                  onChange={e => setImportText(e.target.value)}
+                  className="w-full h-32 bg-cyber-bg-dark border border-cyber-border-dark rounded p-2 text-[10px] font-mono text-cyber-text-primary-dark resize-none outline-none focus:border-cyber-blue"
+                />
+              ) : (
+                <input
+                  type="url"
+                  placeholder="https://raw.githubusercontent.com/.../SKILL.md"
+                  value={importText}
+                  onChange={e => setImportText(e.target.value)}
+                  className="w-full h-8 bg-cyber-bg-dark border border-cyber-border-dark rounded px-2 text-[10px] font-sans text-cyber-text-primary-dark outline-none focus:border-cyber-blue"
+                />
+              )}
+
+              {importError && (
+                <div className="p-2 bg-red-500/10 border border-red-500/20 text-red-500 rounded text-[9px] font-mono whitespace-pre-wrap">
+                  {importError}
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-cyber-border-dark flex justify-end gap-2">
+              <button 
+                onClick={() => setImportModalOpen(false)}
+                className="px-3 py-1.5 text-[10px] font-semibold text-cyber-text-muted-dark hover:text-white"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleImportSubmit}
+                className="px-3 py-1.5 bg-cyber-blue hover:bg-[#242424] text-white rounded text-[10px] font-semibold transition-colors"
+              >
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

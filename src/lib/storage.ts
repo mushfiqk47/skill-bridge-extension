@@ -193,6 +193,48 @@ export function saveCachedSkills(skills: SkillFile[]): Promise<void> {
 }
 
 /**
+ * Adds a new imported skill to the cache. Replaces existing skill with same ID if present.
+ */
+export async function saveImportedSkill(skill: SkillFile): Promise<void> {
+  const currentSkills = await getCachedSkills();
+  const index = currentSkills.findIndex(s => s.id === skill.id);
+  
+  if (index >= 0) {
+    currentSkills[index] = skill;
+  } else {
+    currentSkills.push(skill);
+  }
+  
+  await saveCachedSkills(currentSkills);
+}
+
+/**
+ * Removes a skill from the cache by ID.
+ * Returns the updated array of skills.
+ */
+export async function removeSkillFromCache(skillId: string): Promise<SkillFile[]> {
+  const currentSkills = await getCachedSkills();
+  const updatedSkills = currentSkills.filter(s => s.id !== skillId);
+  await saveCachedSkills(updatedSkills);
+  return updatedSkills;
+}
+
+/**
+ * Exports a skill as a downloadable file
+ */
+export function exportSkillAsFile(skill: SkillFile): void {
+  const blob = new Blob([skill.rawSource], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${skill.id}.md`;
+  a.click();
+  
+  URL.revokeObjectURL(url);
+}
+
+/**
  * Validates that an object conforms to the Settings interface shape.
  * Used to guard against malformed imported config files.
  */
