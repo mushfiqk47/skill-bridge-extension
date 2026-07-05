@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { 
   FolderOpen, Search, Star, RefreshCw, Settings as SettingsIcon, AlertCircle, 
   FileText, ShieldAlert, Sparkles
 } from 'lucide-react';
-import { SkillFile, SyncTarget } from '../lib/types';
+import { SkillFile, SyncTarget, Settings } from '../lib/types';
 import { 
   getDirectoryHandle, saveDirectoryHandle, 
   getSettings, saveSettings, getCachedSkills, saveCachedSkills 
@@ -16,7 +16,14 @@ import '../styles/global.css';
 function PopupApp() {
   const [skills, setSkills] = useState<SkillFile[]>([]);
   const [targets, setTargets] = useState<SyncTarget[]>([]);
-  const [settings, setSettings] = useState<any>(null);
+  const [, setSettingsState] = useState<Settings | null>(null);
+  const settingsRef = useRef<Settings | null>(null);
+
+  // Wrapper that keeps the ref in sync with state
+  const setSettings = (s: Settings | null) => {
+    settingsRef.current = s;
+    setSettingsState(s);
+  };
   
   // Library scans & handles
   const [folderName, setFolderName] = useState<string>('');
@@ -86,9 +93,10 @@ function PopupApp() {
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
       chrome.runtime.sendMessage({ action: 'detect_targets' }, (response) => {
         if (response && response.success) {
-          // Merge custom target paths from settings if any
+          // Read from ref to avoid stale closure over initial null state
+          const currentSettings = settingsRef.current;
           const mergedTargets = response.targets.map((t: SyncTarget) => {
-            const configured = settings?.targets?.[t.id];
+            const configured = currentSettings?.targets?.[t.id];
             return {
               ...t,
               customPath: configured?.customPath || '',
@@ -336,17 +344,20 @@ Create complete, premium brand guidelines boards with minimalist grid structures
     }
   };
 
-  // Filtering calculations
-  const allTags = Array.from(new Set(skills.flatMap(s => s.tags || [])));
-  const filteredSkills = skills.filter(skill => {
-    const matchesSearch = 
-      skill.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      skill.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      skill.id.toLowerCase().includes(searchQuery.toLowerCase());
-      
-    const matchesTag = selectedTag === 'all' || (skill.tags && skill.tags.includes(selectedTag));
-    return matchesSearch && matchesTag;
-  });
+  // Filtering calculations — memoized to avoid re-computation on every render
+  const allTags = useMemo(() => Array.from(new Set(skills.flatMap(s => s.tags || []))), [skills]);
+  const filteredSkills = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return skills.filter(skill => {
+      const matchesSearch = 
+        skill.name.toLowerCase().includes(query) || 
+        skill.description.toLowerCase().includes(query) ||
+        skill.id.toLowerCase().includes(query);
+        
+      const matchesTag = selectedTag === 'all' || (skill.tags && skill.tags.includes(selectedTag));
+      return matchesSearch && matchesTag;
+    });
+  }, [skills, searchQuery, selectedTag]);
 
   const toggleSelectAll = () => {
     if (Object.keys(selectedSkillsMap).length === filteredSkills.length) {

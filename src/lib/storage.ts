@@ -4,8 +4,15 @@ const DB_NAME = 'SkillBridgeDB';
 const STORE_NAME = 'handles';
 const HANDLE_KEY = 'skills_root';
 
-// Helper to open IndexedDB
+// Cached singleton connection — avoids reopening the database on every call
+// while still allowing proper cleanup if needed.
+let cachedDb: IDBDatabase | null = null;
+
 function openDB(): Promise<IDBDatabase> {
+  if (cachedDb) {
+    return Promise.resolve(cachedDb);
+  }
+
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => {
@@ -14,7 +21,12 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_NAME);
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      cachedDb = request.result;
+      // If the connection is unexpectedly closed, clear the cache
+      cachedDb.onclose = () => { cachedDb = null; };
+      resolve(cachedDb);
+    };
     request.onerror = () => reject(request.error);
   });
 }
@@ -103,7 +115,15 @@ export function getSettings(): Promise<Settings> {
   return new Promise((resolve) => {
     if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
       const local = localStorage.getItem('sb_settings');
-      resolve(local ? JSON.parse(local) : DEFAULT_SETTINGS);
+      if (local) {
+        try {
+          resolve({ ...DEFAULT_SETTINGS, ...JSON.parse(local) });
+        } catch (_e) {
+          resolve(DEFAULT_SETTINGS);
+        }
+      } else {
+        resolve(DEFAULT_SETTINGS);
+      }
       return;
     }
 
@@ -139,7 +159,15 @@ export function getCachedSkills(): Promise<SkillFile[]> {
   return new Promise((resolve) => {
     if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
       const local = localStorage.getItem('sb_cached_skills');
-      resolve(local ? JSON.parse(local) : []);
+      if (local) {
+        try {
+          resolve(JSON.parse(local));
+        } catch (_e) {
+          resolve([]);
+        }
+      } else {
+        resolve([]);
+      }
       return;
     }
 
@@ -162,4 +190,35 @@ export function saveCachedSkills(skills: SkillFile[]): Promise<void> {
 
     chrome.storage.local.set({ cachedSkills: skills }, () => resolve());
   });
+}
+
+/**
+ * Validates that an object conforms to the Settings interface shape.
+ * Used to guard against malformed imported config files.
+ */
+export function isValidSettingsShape(obj: unknown): obj is Settings {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const candidate = obj as Record<string, unknown>;
+  
+  // Must have the required top-level keys with correct types
+  if (typeof candidate.targets !== 'object' || candidate.targets === null) return false;
+  if (typeof candidate.siteAdapters !== 'object' || candidate.siteAdapters === null) return false;
+  if (typeof candidate.autoRescanOnOpen !== 'boolean') return false;
+  if (typeof candidate.privacyTelemetry !== 'boolean') return false;
+  
+  // Validate targets structure: each value must have { enabled: boolean }
+  const targets = candidate.targets as Record<string, unknown>;
+  for (const key of Object.keys(targets)) {
+    const target = targets[key];
+    if (typeof target !== 'object' || target === null) return false;
+    if (typeof (target as Record<string, unknown>).enabled !== 'boolean') return false;
+  }
+  
+  // Validate siteAdapters structure: each value must be boolean
+  const adapters = candidate.siteAdapters as Record<string, unknown>;
+  for (const key of Object.keys(adapters)) {
+    if (typeof adapters[key] !== 'boolean') return false;
+  }
+  
+  return true;
 }

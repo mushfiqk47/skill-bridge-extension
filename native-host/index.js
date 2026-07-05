@@ -43,7 +43,7 @@ function sendMessage(msg) {
 }
 
 function sendError(text) {
-  sendMessage({ success: false, error: true, message: text });
+  sendMessage({ success: false, error: text });
 }
 
 function handleMessage(msg) {

@@ -4,7 +4,7 @@ import {
   ShieldCheck, Server, Download, Upload, 
   CheckCircle, AlertCircle, Copy 
 } from 'lucide-react';
-import { getSettings, saveSettings } from '../lib/storage';
+import { getSettings, saveSettings, isValidSettingsShape, DEFAULT_SETTINGS } from '../lib/storage';
 import { Settings as SettingsType } from '../lib/types';
 import '../styles/global.css';
 
@@ -130,13 +130,15 @@ function OptionsApp() {
     reader.onload = async (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
-        // Basic validation
-        if (parsed.targets && parsed.siteAdapters) {
-          setSettings(parsed);
-          await saveSettings(parsed);
+        // Validate against the Settings type shape before accepting
+        if (isValidSettingsShape(parsed)) {
+          // Merge with defaults so any new keys added in future versions are included
+          const merged: SettingsType = { ...DEFAULT_SETTINGS, ...parsed };
+          setSettings(merged);
+          await saveSettings(merged);
           alert('Configuration imported successfully.');
         } else {
-          alert('Invalid configuration file structure.');
+          alert('Invalid configuration file. The JSON does not match the expected settings structure.');
         }
       } catch (err: any) {
         alert('Failed to parse configuration file: ' + err.message);
