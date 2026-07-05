@@ -1,0 +1,221 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Design System Tokens — W3C DTCG Format",
+
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "heading": { "$value": "Inter", "$description": "Primary typeface for headings" },
+      "body": { "$value": "Inter", "$description": "Primary typeface for body text" },
+      "mono": { "$value": "JetBrains Mono", "$description": "Monospace typeface for code" }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "regular": { "$value": 400 },
+      "medium": { "$value": 500 },
+      "semibold": { "$value": 600 },
+      "bold": { "$value": 700 }
+    }
+  },
+
+  "color": {
+    "$type": "color",
+
+    "primitive": {
+      "$description": "Raw palette values — never reference directly in components",
+
+      "primary": {
+        "50":  { "$value": "#eff6ff" },
+        "100": { "$value": "#dbeafe" },
+        "200": { "$value": "#bfdbfe" },
+        "300": { "$value": "#93c5fd" },
+        "400": { "$value": "#60a5fa" },
+        "500": { "$value": "#3b82f6" },
+        "600": { "$value": "#2563eb" },
+        "700": { "$value": "#1d4ed8" },
+        "800": { "$value": "#1e40af" },
+        "900": { "$value": "#1e3a8a" },
+        "950": { "$value": "#172554" }
+      },
+      "neutral": {
+        "0":   { "$value": "#ffffff" },
+        "50":  { "$value": "#fafafa" },
+        "100": { "$value": "#f5f5f5" },
+        "200": { "$value": "#e5e5e5" },
+        "300": { "$value": "#d4d4d4" },
+        "400": { "$value": "#a3a3a3" },
+        "500": { "$value": "#737373" },
+        "600": { "$value": "#525252" },
+        "700": { "$value": "#404040" },
+        "800": { "$value": "#262626" },
+        "900": { "$value": "#171717" },
+        "950": { "$value": "#0a0a0a" }
+      },
+      "red": {
+        "50":  { "$value": "#fef2f2" },
+        "500": { "$value": "#ef4444" },
+        "600": { "$value": "#dc2626" },
+        "700": { "$value": "#b91c1c" },
+        "950": { "$value": "#450a0a" }
+      },
+      "green": {
+        "50":  { "$value": "#f0fdf4" },
+        "500": { "$value": "#22c55e" },
+        "600": { "$value": "#16a34a" },
+        "700": { "$value": "#15803d" },
+        "950": { "$value": "#052e16" }
+      },
+      "amber": {
+        "50":  { "$value": "#fffbeb" },
+        "500": { "$value": "#f59e0b" },
+        "600": { "$value": "#d97706" },
+        "700": { "$value": "#b45309" },
+        "950": { "$value": "#451a03" }
+      }
+    },
+
+    "semantic": {
+      "$description": "Role-based colors — these switch between modes",
+
+      "bg": {
+        "primary":   { "$value": "{color.primitive.neutral.0}", "$description": "Main page background" },
+        "secondary": { "$value": "{color.primitive.neutral.50}", "$description": "Subtle section backgrounds" },
+        "elevated":  { "$value": "{color.primitive.neutral.0}", "$description": "Cards, modals, popovers" },
+        "inverse":   { "$value": "{color.primitive.neutral.900}", "$description": "Inverted sections" },
+        "disabled":  { "$value": "{color.primitive.neutral.100}", "$description": "Disabled element backgrounds" }
+      },
+      "text": {
+        "primary":   { "$value": "{color.primitive.neutral.900}", "$description": "Main body text" },
+        "secondary": { "$value": "{color.primitive.neutral.600}", "$description": "Supporting text" },
+        "tertiary":  { "$value": "{color.primitive.neutral.500}", "$description": "Placeholder, hint text" },
+        "disabled":  { "$value": "{color.primitive.neutral.400}", "$description": "Disabled text" },
+        "inverse":   { "$value": "{color.primitive.neutral.0}", "$description": "Text on dark backgrounds" },
+        "link":      { "$value": "{color.primitive.primary.600}", "$description": "Hyperlinks" }
+      },
+      "action": {
+        "primary":       { "$value": "{color.primitive.primary.600}", "$description": "Primary CTA background" },
+        "primary-hover": { "$value": "{color.primitive.primary.700}", "$description": "Primary CTA hover" },
+        "primary-active":{ "$value": "{color.primitive.primary.800}", "$description": "Primary CTA active/pressed" },
+        "primary-text":  { "$value": "{color.primitive.neutral.0}", "$description": "Text on primary CTA" }
+      },
+      "border": {
+        "default": { "$value": "{color.primitive.neutral.200}", "$description": "Standard borders" },
+        "strong":  { "$value": "{color.primitive.neutral.400}", "$description": "Emphasized borders" },
+        "subtle":  { "$value": "{color.primitive.neutral.100}", "$description": "Subtle dividers" },
+        "focus":   { "$value": "{color.primitive.primary.500}", "$description": "Focus ring color" }
+      },
+      "feedback": {
+        "success":      { "$value": "{color.primitive.green.600}", "$description": "Success indicators" },
+        "success-bg":   { "$value": "{color.primitive.green.50}", "$description": "Success banner background" },
+        "warning":      { "$value": "{color.primitive.amber.600}", "$description": "Warning indicators" },
+        "warning-bg":   { "$value": "{color.primitive.amber.50}", "$description": "Warning banner background" },
+        "error":        { "$value": "{color.primitive.red.600}", "$description": "Error indicators" },
+        "error-bg":     { "$value": "{color.primitive.red.50}", "$description": "Error banner background" },
+        "info":         { "$value": "{color.primitive.primary.500}", "$description": "Info indicators" },
+        "info-bg":      { "$value": "{color.primitive.primary.50}", "$description": "Info banner background" }
+      }
+    }
+  },
+
+  "spacing": {
+    "$type": "dimension",
+    "0":  { "$value": "0px" },
+    "0.5": { "$value": "2px" },
+    "1":  { "$value": "4px" },
+    "1.5": { "$value": "6px" },
+    "2":  { "$value": "8px" },
+    "3":  { "$value": "12px" },
+    "4":  { "$value": "16px" },
+    "5":  { "$value": "20px" },
+    "6":  { "$value": "24px" },
+    "8":  { "$value": "32px" },
+    "10": { "$value": "40px" },
+    "12": { "$value": "48px" },
+    "16": { "$value": "64px" },
+    "20": { "$value": "80px" },
+    "24": { "$value": "96px" }
+  },
+
+  "radius": {
+    "$type": "dimension",
+    "none": { "$value": "0px" },
+    "sm":   { "$value": "4px" },
+    "md":   { "$value": "8px" },
+    "lg":   { "$value": "12px" },
+    "xl":   { "$value": "16px" },
+    "2xl":  { "$value": "24px" },
+    "full": { "$value": "9999px" }
+  },
+
+  "elevation": {
+    "$type": "shadow",
+    "0": { "$value": { "color": "transparent", "offsetX": "0px", "offsetY": "0px", "blur": "0px", "spread": "0px" } },
+    "1": { "$value": { "color": "#0000001a", "offsetX": "0px", "offsetY": "1px", "blur": "3px", "spread": "0px" }, "$description": "Cards, raised sections" },
+    "2": { "$value": { "color": "#0000001a", "offsetX": "0px", "offsetY": "4px", "blur": "6px", "spread": "0px" }, "$description": "Dropdowns, sticky headers" },
+    "3": { "$value": { "color": "#0000001a", "offsetX": "0px", "offsetY": "10px", "blur": "15px", "spread": "0px" }, "$description": "Popovers, floating panels" },
+    "4": { "$value": { "color": "#0000001a", "offsetX": "0px", "offsetY": "20px", "blur": "25px", "spread": "0px" }, "$description": "Modals, dialogs" },
+    "5": { "$value": { "color": "#00000026", "offsetX": "0px", "offsetY": "25px", "blur": "50px", "spread": "0px" }, "$description": "Toast notifications" }
+  },
+
+  "duration": {
+    "$type": "duration",
+    "instant": { "$value": "100ms" },
+    "fast":    { "$value": "150ms" },
+    "normal":  { "$value": "250ms" },
+    "slow":    { "$value": "400ms" },
+    "glacial": { "$value": "700ms" }
+  },
+
+  "easing": {
+    "$type": "cubicBezier",
+    "default":  { "$value": [0.4, 0, 0.2, 1], "$description": "General purpose" },
+    "in":       { "$value": [0.4, 0, 1, 1], "$description": "Elements exiting" },
+    "out":      { "$value": [0, 0, 0.2, 1], "$description": "Elements entering" },
+    "in-out":   { "$value": [0.4, 0, 0.2, 1], "$description": "On-screen transitions" },
+    "spring":   { "$value": [0.34, 1.56, 0.64, 1], "$description": "Playful bounce" }
+  },
+
+  "typography": {
+    "$type": "typography",
+    "display-large": {
+      "$value": { "fontFamily": "{font.family.heading}", "fontSize": "48px", "fontWeight": 700, "lineHeight": "56px", "letterSpacing": "-0.03em" },
+      "$description": "Hero headlines"
+    },
+    "display-small": {
+      "$value": { "fontFamily": "{font.family.heading}", "fontSize": "36px", "fontWeight": 600, "lineHeight": "44px", "letterSpacing": "-0.02em" },
+      "$description": "Section heroes"
+    },
+    "heading-1": {
+      "$value": { "fontFamily": "{font.family.heading}", "fontSize": "32px", "fontWeight": 600, "lineHeight": "40px", "letterSpacing": "-0.02em" },
+      "$description": "Page titles"
+    },
+    "heading-2": {
+      "$value": { "fontFamily": "{font.family.heading}", "fontSize": "24px", "fontWeight": 600, "lineHeight": "32px", "letterSpacing": "-0.01em" },
+      "$description": "Section headers"
+    },
+    "heading-3": {
+      "$value": { "fontFamily": "{font.family.heading}", "fontSize": "20px", "fontWeight": 600, "lineHeight": "28px", "letterSpacing": "-0.01em" },
+      "$description": "Subsection headers"
+    },
+    "body-large": {
+      "$value": { "fontFamily": "{font.family.body}", "fontSize": "18px", "fontWeight": 400, "lineHeight": "28px", "letterSpacing": "0" },
+      "$description": "Emphasized body text"
+    },
+    "body": {
+      "$value": { "fontFamily": "{font.family.body}", "fontSize": "16px", "fontWeight": 400, "lineHeight": "24px", "letterSpacing": "0" },
+      "$description": "Standard body text"
+    },
+    "body-small": {
+      "$value": { "fontFamily": "{font.family.body}", "fontSize": "14px", "fontWeight": 400, "lineHeight": "20px", "letterSpacing": "0" },
+      "$description": "Secondary text"
+    },
+    "label": {
+      "$value": { "fontFamily": "{font.family.body}", "fontSize": "14px", "fontWeight": 500, "lineHeight": "20px", "letterSpacing": "0.01em" },
+      "$description": "Button text, form labels"
+    },
+    "caption": {
+      "$value": { "fontFamily": "{font.family.body}", "fontSize": "12px", "fontWeight": 400, "lineHeight": "16px", "letterSpacing": "0.02em" },
+      "$description": "Helper text, timestamps"
+    }
+  }
+}

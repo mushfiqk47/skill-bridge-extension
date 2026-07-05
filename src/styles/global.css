@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+@layer utilities {
+  .tracking-cal-xl {
+    letter-spacing: -2px;
+  }
+  .tracking-cal-lg {
+    letter-spacing: -1.5px;
+  }
+  .tracking-cal-md {
+    letter-spacing: -1px;
+  }
+  .tracking-cal-sm {
+    letter-spacing: -0.5px;
+  }
+}
+
+@layer base {
+  /* High-quality scrollbars tailored for Cal.com light mode layout lists */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+
+  body {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #ffffff; /* Cal.com white canvas floor */
+  }
+
+  /* Globally force vector icons to use custom thicker stroke weight for Radix/Phosphor aesthetic */
+  svg {
+    stroke-width: 2.2px !important;
+  }
+}
+
+.custom-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #111111;
+}
+
+html, body, #root {
+  height: 100%;
+}

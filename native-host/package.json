@@ -1,0 +1,19 @@
+{
+  "name": "skill-bridge-sync",
+  "version": "1.0.0",
+  "description": "Native Sync Messaging Companion for Skill Bridge",
+  "main": "index.js",
+  "private": true,
+  "bin": "index.js",
+  "pkg": {
+    "targets": [
+      "node18-win-x64",
+      "node18-macos-x64",
+      "node18-linux-x64"
+    ],
+    "outputPath": "bin"
+  },
+  "scripts": {
+    "package": "pkg ."
+  }
+}
