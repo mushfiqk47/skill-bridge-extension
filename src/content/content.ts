@@ -24,7 +24,12 @@ const SITE_CONFIGS: Record<string, SiteConfig> = {
   },
   'deepseek.com': {
     name: 'DeepSeek',
-    inputSelector: 'textarea, #chat-input, [contenteditable="true"]',
+    inputSelector: 'textarea#chat-input, textarea, [contenteditable="true"]',
+    containerSelector: 'body'
+  },
+  'grok.com': {
+    name: 'Grok',
+    inputSelector: 'textarea, [contenteditable="true"], [role="textbox"]',
     containerSelector: 'body'
   },
   'qwen.ai': {
@@ -35,6 +40,11 @@ const SITE_CONFIGS: Record<string, SiteConfig> = {
   'chatglm.cn': {
     name: 'Z-AI (Zhipu)',
     inputSelector: 'textarea, [contenteditable="true"]',
+    containerSelector: 'body'
+  },
+  'z.ai': {
+    name: 'Z-AI',
+    inputSelector: 'textarea, [contenteditable="true"], [role="textbox"]',
     containerSelector: 'body'
   },
   'kimi.moonshot.cn': {
@@ -289,43 +299,31 @@ function injectTriggerButton(isFallback: boolean) {
   } else {
     const inputEl = document.querySelector(activeConfig!.inputSelector) as HTMLElement;
     const container = inputEl ? findInputContainer(inputEl) : null;
-    if (container && container.parentNode) {
-      // Find or create wrapper row above the container
-      let row = document.getElementById('skill-bridge-trigger-row');
-      if (!row) {
-        row = document.createElement('div');
-        row.id = 'skill-bridge-trigger-row';
-        Object.assign(row.style, {
-          display: 'flex',
-          width: '100%',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          marginBottom: '4px',
-          padding: '0 4px',
-          boxSizing: 'border-box'
-        });
-        container.parentNode.insertBefore(row, container);
-      }
-      row.innerHTML = ''; // Clear previous and append current trigger
-      row.appendChild(trigger);
-    } else {
-      // Fallback to floating button
-      Object.assign(trigger.style, {
-        position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-        width: '40px',
-        height: '40px',
-        borderRadius: '50%',
-        backgroundColor: '#2563eb'
-      });
-      trigger.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 512 512" fill="white">
-          ${brainSvgContent}
-        </svg>
-      `;
-      document.body.appendChild(trigger);
+
+    // Use fixed positioning anchored to the input container's location
+    Object.assign(trigger.style, {
+      position: 'fixed',
+      zIndex: '9999'
+    });
+    document.body.appendChild(trigger);
+
+    function updateTriggerPosition() {
+      const el = container || document.querySelector(activeConfig!.inputSelector) as HTMLElement;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // Position below the input, aligned to the right edge
+      trigger.style.top = `${rect.bottom + 6}px`;
+      trigger.style.left = `${rect.right - trigger.offsetWidth}px`;
     }
+
+    // Initial position
+    requestAnimationFrame(updateTriggerPosition);
+
+    // Keep position updated on scroll/resize
+    window.addEventListener('scroll', updateTriggerPosition, true);
+    window.addEventListener('resize', updateTriggerPosition);
+    // Periodic re-check for dynamic layouts (SPA navigation, expanding textareas)
+    setInterval(updateTriggerPosition, 1500);
   }
 
   trigger.addEventListener('click', (e) => {
@@ -343,11 +341,23 @@ function toggleSkillPickerOverlay(isFallback: boolean) {
 
   const overlay = document.createElement('div');
   overlay.id = 'skill-bridge-overlay';
+
+  // Position the overlay relative to the trigger button
+  const triggerBtn = document.getElementById('skill-bridge-trigger');
+  let overlayBottom = '80px';
+  let overlayRight = '24px';
+
+  if (triggerBtn) {
+    const rect = triggerBtn.getBoundingClientRect();
+    // Place overlay above the button, aligned to its right edge
+    overlayBottom = `${window.innerHeight - rect.top + 8}px`;
+    overlayRight = `${window.innerWidth - rect.right}px`;
+  }
   
   Object.assign(overlay.style, {
     position: 'fixed',
-    bottom: isFallback ? '75px' : '80px',
-    right: '24px',
+    bottom: overlayBottom,
+    right: overlayRight,
     zIndex: '10000',
     width: '320px',
     height: '380px',
