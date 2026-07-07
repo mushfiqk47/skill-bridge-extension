@@ -25,7 +25,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "types": ["node", "chrome"]
+    "types": ["node", "chrome", "wicg-file-system-access"]
   },
   "include": ["src", "vite.config.ts"]
 }

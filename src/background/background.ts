@@ -1,6 +1,6 @@
 // Skill Bridge Service Worker (Manifest V3 Background Script)
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const { action, payload } = message;
 
   // 1. Verify Host Installation (Ping)

@@ -152,6 +152,12 @@ let positionIntervalId: ReturnType<typeof setInterval> | null = null;
 let scrollHandler: (() => void) | null = null;
 let resizeHandler: (() => void) | null = null;
 
+// ── Drag state ─────────────────────────────────────────────
+const DRAG_STORAGE_KEY = 'sb_trigger_positions';
+let isDragging = false;
+let isPositionedByUser = false;
+let justDragged = false;
+
 if (activeConfig) {
   initInjectionLoop();
 }
@@ -249,22 +255,145 @@ function cleanupPositionTracking() {
 }
 
 // ────────────────────────────────────────────────────────────
+// Drag Helpers
+// ────────────────────────────────────────────────────────────
+
+function getStorageKey(): string {
+  return `${DRAG_STORAGE_KEY}_${window.location.hostname}`;
+}
+
+function loadSavedPosition(): Promise<{ top: string; left: string } | null> {
+  return new Promise((resolve) => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get([getStorageKey()], (result) => {
+          resolve(result[getStorageKey()] || null);
+        });
+      } else {
+        resolve(null);
+      }
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+function savePosition(top: string, left: string): void {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.set({ [getStorageKey()]: { top, left } });
+    }
+  } catch { /* ignore */ }
+}
+
+function clampPosition(top: number, left: number, elW: number, elH: number): { top: number; left: number } {
+  const margin = 4;
+  return {
+    top: Math.max(margin, Math.min(top, window.innerHeight - elH - margin)),
+    left: Math.max(margin, Math.min(left, window.innerWidth - elW - margin))
+  };
+}
+
+function makeDraggable(el: HTMLElement, onDragStart?: () => void, onDragEnd?: () => void) {
+  let startX = 0;
+  let startY = 0;
+  let origTop = 0;
+  let origLeft = 0;
+  let hasMoved = false;
+
+  function onPointerDown(e: PointerEvent) {
+    // Only left click, ignore right-click
+    if (e.button !== 0) return;
+    // Don't interfere with click on overlay children
+    if ((e.target as HTMLElement).closest('#skill-bridge-overlay')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    hasMoved = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    origTop = el.getBoundingClientRect().top;
+    origLeft = el.getBoundingClientRect().left;
+
+    isDragging = true;
+    el.style.transition = 'none';
+    el.style.cursor = 'grabbing';
+    el.style.userSelect = 'none';
+    el.style.boxShadow = '0 8px 24px rgba(0,0,0,0.18)';
+    el.style.transform = 'scale(1.04)';
+
+    onDragStart?.();
+
+    document.addEventListener('pointermove', onPointerMove, { passive: false });
+    document.addEventListener('pointerup', onPointerUp, { once: true });
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (!isDragging) return;
+    e.preventDefault();
+
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+      hasMoved = true;
+    }
+
+    const elW = el.offsetWidth;
+    const elH = el.offsetHeight;
+    const clamped = clampPosition(origTop + dy, origLeft + dx, elW, elH);
+
+    el.style.top = `${clamped.top}px`;
+    el.style.left = `${clamped.left}px`;
+    // Clear bottom/right so fixed positioning uses top/left
+    el.style.bottom = 'auto';
+    el.style.right = 'auto';
+  }
+
+  function onPointerUp(_e: PointerEvent) {
+    isDragging = false;
+    el.style.cursor = 'grab';
+    el.style.userSelect = '';
+    el.style.boxShadow = '';
+    el.style.transform = '';
+    el.style.transition = '';
+
+    document.removeEventListener('pointermove', onPointerMove);
+
+    if (hasMoved) {
+      // Persist the new position
+      savePosition(el.style.top, el.style.left);
+      isPositionedByUser = true;
+      // Suppress the click that follows pointerup
+      justDragged = true;
+      setTimeout(() => { justDragged = false; }, 300);
+    }
+
+    onDragEnd?.();
+  }
+
+  el.addEventListener('pointerdown', onPointerDown);
+}
+
+// ────────────────────────────────────────────────────────────
 // Trigger Button Injection
 // ────────────────────────────────────────────────────────────
 
 function injectTriggerButton(isFallback: boolean) {
   // Clean up any previous tracking before re-injecting
   cleanupPositionTracking();
+  isPositionedByUser = false;
 
   const trigger = document.createElement('div');
   trigger.id = 'skill-bridge-trigger';
 
   if (isFallback) {
-    // Large circular floating trigger in window corner
+    // Large circular floating trigger
     Object.assign(trigger.style, {
       zIndex: '9999',
       backgroundColor: '#111111',
-      cursor: 'pointer',
+      cursor: 'grab',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -275,28 +404,33 @@ function injectTriggerButton(isFallback: boolean) {
       right: '24px',
       width: '40px',
       height: '40px',
-      borderRadius: '50%'
+      borderRadius: '50%',
+      touchAction: 'none'
     });
 
     trigger.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 512 512" fill="white">
+      <svg width="20" height="20" viewBox="0 0 512 512" fill="white" style="pointer-events:none;">
         ${BRAIN_SVG_PATHS}
       </svg>
     `;
 
-    trigger.addEventListener('mouseover', () => { 
-      trigger.style.backgroundColor = '#242424'; 
-      trigger.style.transform = 'scale(1.05)';
+    trigger.addEventListener('mouseover', () => {
+      if (!isDragging) {
+        trigger.style.backgroundColor = '#242424';
+        trigger.style.transform = 'scale(1.05)';
+      }
     });
-    trigger.addEventListener('mouseout', () => { 
-      trigger.style.backgroundColor = '#111111'; 
-      trigger.style.transform = 'scale(1)';
+    trigger.addEventListener('mouseout', () => {
+      if (!isDragging) {
+        trigger.style.backgroundColor = '#111111';
+        trigger.style.transform = 'scale(1)';
+      }
     });
   } else {
-    // Premium pill badge sitting above the input container
+    // Premium pill badge
     Object.assign(trigger.style, {
       zIndex: '9999',
-      cursor: 'pointer',
+      cursor: 'grab',
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -307,63 +441,74 @@ function injectTriggerButton(isFallback: boolean) {
       transition: 'border-color 0.2s, box-shadow 0.2s',
       height: '22px',
       borderRadius: '11px',
-      padding: '0 10px'
+      padding: '0 10px',
+      touchAction: 'none'
     });
 
     trigger.innerHTML = `
-      <svg width="12" height="12" viewBox="0 0 512 512" fill="#111111">
+      <svg width="12" height="12" viewBox="0 0 512 512" fill="#111111" style="pointer-events:none;">
         ${BRAIN_SVG_PATHS}
       </svg>
-      <span style="font-size: 10px; font-weight: 600; color: #111111; font-family: Inter, system-ui, sans-serif; user-select: none;">SKILLS</span>
-      <span style="width: 4px; height: 4px; border-radius: 50%; background-color: #10b981;"></span>
+      <span style="font-size: 10px; font-weight: 600; color: #111111; font-family: Inter, system-ui, sans-serif; user-select: none; pointer-events:none;">SKILLS</span>
+      <span style="width: 4px; height: 4px; border-radius: 50%; background-color: #10b981; pointer-events:none;"></span>
     `;
 
-    trigger.addEventListener('mouseover', () => { 
-      trigger.style.borderColor = '#111111';
+    trigger.addEventListener('mouseover', () => {
+      if (!isDragging) trigger.style.borderColor = '#111111';
     });
-    trigger.addEventListener('mouseout', () => { 
-      trigger.style.borderColor = '#e5e7eb';
+    trigger.addEventListener('mouseout', () => {
+      if (!isDragging) trigger.style.borderColor = '#e5e7eb';
     });
   }
 
   trigger.title = isFallback ? 'Skill Bridge: Copy Skill (Input box not found)' : 'Skill Bridge: Inject Prompt Context';
-  
-  if (isFallback) {
-    document.body.appendChild(trigger);
-  } else {
-    const inputEl = document.querySelector(activeConfig!.inputSelector) as HTMLElement;
-    const container = inputEl ? findInputContainer(inputEl) : null;
+  document.body.appendChild(trigger);
 
-    // Use fixed positioning anchored to the input container's location
-    Object.assign(trigger.style, {
-      position: 'fixed',
-      zIndex: '9999'
-    });
-    document.body.appendChild(trigger);
+  // ── Restore saved position or set default ──
+  loadSavedPosition().then(saved => {
+    if (saved) {
+      trigger.style.position = 'fixed';
+      trigger.style.top = saved.top;
+      trigger.style.left = saved.left;
+      trigger.style.bottom = 'auto';
+      trigger.style.right = 'auto';
+      isPositionedByUser = true;
+    } else if (!isFallback) {
+      // Auto-position below input container
+      const inputEl = document.querySelector(activeConfig!.inputSelector) as HTMLElement;
+      const container = inputEl ? findInputContainer(inputEl) : null;
 
-    function updateTriggerPosition() {
-      const el = container || document.querySelector(activeConfig!.inputSelector) as HTMLElement;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      // Position below the input, aligned to the right edge
-      trigger.style.top = `${rect.bottom + 6}px`;
-      trigger.style.left = `${rect.right - trigger.offsetWidth}px`;
+      Object.assign(trigger.style, {
+        position: 'fixed',
+        zIndex: '9999'
+      });
+
+      function updateTriggerPosition() {
+        if (isPositionedByUser || isDragging) return;
+        const el = container || document.querySelector(activeConfig!.inputSelector) as HTMLElement;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        trigger.style.top = `${rect.bottom + 6}px`;
+        trigger.style.left = `${rect.right - trigger.offsetWidth}px`;
+      }
+
+      requestAnimationFrame(updateTriggerPosition);
+
+      scrollHandler = updateTriggerPosition;
+      resizeHandler = updateTriggerPosition;
+      window.addEventListener('scroll', scrollHandler, true);
+      window.addEventListener('resize', resizeHandler);
+      positionIntervalId = setInterval(updateTriggerPosition, 1500);
     }
+  });
 
-    // Initial position
-    requestAnimationFrame(updateTriggerPosition);
+  // ── Make it draggable ──
+  makeDraggable(trigger, undefined, undefined);
 
-    // Keep position updated on scroll/resize — store references for cleanup
-    scrollHandler = updateTriggerPosition;
-    resizeHandler = updateTriggerPosition;
-    window.addEventListener('scroll', scrollHandler, true);
-    window.addEventListener('resize', resizeHandler);
-    // Periodic re-check for dynamic layouts (SPA navigation, expanding textareas)
-    positionIntervalId = setInterval(updateTriggerPosition, 1500);
-  }
-
+  // ── Click to open overlay (only fires if no drag happened) ──
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (justDragged || isDragging) return;
     toggleSkillPickerOverlay(isFallback);
   });
 }

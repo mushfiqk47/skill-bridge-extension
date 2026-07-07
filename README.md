@@ -14,6 +14,7 @@ It separates its operations into two distinct tiers:
 ├── manifest.json              # Extension Manifest
 ├── vite.config.ts             # Bundler configs for Popup/Options UI
 ├── build.js                   # Programmatic builder script
+├── generate_icons.js          # Generates PNG extension icons using sharp
 ├── src/
 │   ├── background/            # MV3 background worker
 │   ├── content/               # Web chat injector & floating widgets
@@ -29,10 +30,13 @@ It separates its operations into two distinct tiers:
 ## Getting Started
 
 ### 1. Build the Extension
-Ensure you have Node.js installed, then install dependencies and compile the assets:
+Ensure you have Node.js installed, then install dependencies, generate the icons, and compile the assets:
 ```bash
 # Install dependencies
 npm install
+
+# Generate PNG icons from logo.svg
+node generate_icons.js
 
 # Build extension
 npm run build
