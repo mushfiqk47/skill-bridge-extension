@@ -26,7 +26,9 @@
     "https://poe.com/*",
     "https://groq.com/*",
     "https://www.phind.com/*",
-    "https://phind.com/*"
+    "https://phind.com/*",
+    "https://www.meta.ai/*",
+    "https://meta.ai/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -62,7 +64,9 @@
         "https://poe.com/*",
         "https://groq.com/*",
         "https://www.phind.com/*",
-        "https://phind.com/*"
+        "https://phind.com/*",
+        "https://www.meta.ai/*",
+        "https://meta.ai/*"
       ],
       "js": [
         "content.js"

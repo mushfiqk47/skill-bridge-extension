@@ -104,7 +104,8 @@ export const DEFAULT_SETTINGS: Settings = {
     'huggingface.co': true,
     'poe.com': true,
     'groq.com': true,
-    'phind.com': true
+    'phind.com': true,
+    'meta.ai': true
   }
 };
 

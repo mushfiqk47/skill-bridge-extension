@@ -133,6 +133,11 @@ const SITE_CONFIGS: Record<string, SiteConfig> = {
     name: 'Phind',
     inputSelector: 'textarea',
     containerSelector: 'body'
+  },
+  'meta.ai': {
+    name: 'Meta AI',
+    inputSelector: '[contenteditable], textarea, [role="textbox"]',
+    containerSelector: 'body'
   }
 };
 
@@ -163,33 +168,49 @@ if (activeConfig) {
 }
 
 function initInjectionLoop() {
+  let lastUrl = window.location.href;
+
   const interval = setInterval(() => {
     try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+      // If extension context is fully invalidated, stop the loop
+      if (typeof chrome === 'undefined' || !chrome.runtime) {
         clearInterval(interval);
         return;
       }
-      
-      const input = document.querySelector(activeConfig!.inputSelector);
+
+      // Detect SPA navigation — reset state when URL changes
+      const currentUrl = window.location.href;
+      if (currentUrl !== lastUrl) {
+        lastUrl = currentUrl;
+        buttonInjected = false;
+        detectionAttempts = 0;
+        document.getElementById('skill-bridge-trigger')?.remove();
+        document.getElementById('skill-bridge-overlay')?.remove();
+        cleanupPositionTracking();
+      }
+
       const existing = document.getElementById('skill-bridge-trigger');
-      
-      if (input && !existing) {
+
+      if (existing) return; // Button is still in the DOM — nothing to do
+
+      // Button is missing (first run, removed by SPA framework, or after navigation)
+      const input = document.querySelector(activeConfig!.inputSelector);
+
+      if (input) {
         injectTriggerButton(false);
         buttonInjected = true;
-        clearInterval(interval);
+        detectionAttempts = 0;
       } else {
         detectionAttempts++;
-        // If we cannot find the input box after 5 attempts (10 seconds), render a fixed fallback button
-        if (detectionAttempts >= 5 && !buttonInjected && !existing) {
+        if (detectionAttempts >= 5) {
+          // Input not found after enough attempts — render fixed fallback button
           injectTriggerButton(true);
           buttonInjected = true;
-          clearInterval(interval);
           console.warn('Skill Bridge: Could not detect site prompt box. Initialized clipboard fallback widget.');
         }
       }
     } catch (_err) {
-      // Clear interval if context is invalidated
-      clearInterval(interval);
+      // Skip this cycle on transient errors — allow recovery on next cycle
     }
   }, 2000);
 }
@@ -393,11 +414,12 @@ function injectTriggerButton(isFallback: boolean) {
     Object.assign(trigger.style, {
       zIndex: '9999',
       backgroundColor: '#111111',
+      border: '1px solid rgba(255,255,255,0.2)',
       cursor: 'grab',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
       transition: 'background-color 0.2s, transform 0.15s',
       position: 'fixed',
       bottom: '24px',
